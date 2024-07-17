@@ -143,6 +143,7 @@ d_geo %>%
 - `splm` package [@millo2009splm] is used for all the estimation.
 - Maximum likelihood method is used.
 - Statistical testing: 5% significance level.
+- Code available at <
  
 ## Explanatory variables
 
