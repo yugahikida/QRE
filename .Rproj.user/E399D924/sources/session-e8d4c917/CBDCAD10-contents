@@ -1,0 +1,214 @@
+library(ggplot2)
+library(patchwork)
+library(tidyr)
+
+set.seed(0)
+
+# processed data
+d <- read.csv("experiment/data.csv")
+head(d)
+
+# data pre-processing
+d <- read.csv("experiment/MertensRavnData.csv", sep=";")
+
+y <- X <- as.matrix(d[2:nrow(d), 2:4])
+date <- d[2:nrow(d), 1]
+t <- nrow(y); n <- ncol(y)
+
+## y: remove trend, trend^2 and constant
+dummy <- rep(0, t)
+dummy[101] <- 1
+X <- cbind(1, dummy, 1:t, (1:t)^2)
+Atilde <- t(solve(t(X) %*% X) %*% t(X) %*% y)
+y <- y - t(Atilde %*% t(X))
+
+## z:
+z = as.matrix(d[2:nrow(d), 5:6])
+norm <- apply(z, 2, sd)
+z <- sweep(z, 2, apply(z, 2, mean), "-")
+z <- sweep(z, 2, norm, "/")
+
+## concat data
+dat_mat <- cbind(y, z)
+
+## normalize
+normalize <- 0
+if (normalize){
+  norm <- apply(dat_mat, 2, sd)
+  dat_mat <- sweep(dat_mat, 2, apply(dat_mat, 2, mean), "-") # subtract mean
+  dat_mat <- sweep(dat_mat, 2, norm, "/") # divide by norm
+}
+
+head(dat_mat)
+
+# Estimation of parameters
+warmup <- 10000
+iter <- 10000 + warmup
+
+# initial values
+init <- list()
+init$a <- c(-0.0897, -0.1814, -0.0031, -0.1389, -0.1796, -0.0111, 0.1556, 0.3625, 0.0079, -0.0419, 0.0219, -0.0240, 0.1630, -0.0778, -0.0100, -0.2522, -0.2860, -0.0656, 0.1598, -0.0209, -0.0203, 0.1311, 0.1311, 0.0589, -0.4490, 0.4491, -0.120, 0.7907, 0.0953, 0.0112, -0.1826, 1.0466, -0.0450, 0.725, -0.4607, 1.1637)
+init$b <- c(0.0363, 0, -0.0002, -0.0001, 0.0222, 0.0018, 0.0144, 0, 0.0083)
+init$sgt <- c(0, 3, 0, 3, 0, 3)
+
+y_name <- c("TaxRevenues", "GovtSpending", "Output")
+formulas <- c(Output ~ DTFP_UTIL, TaxRevenues ~ TaxNarrative)
+
+noise_size <- 0.001
+scale <- c(0.0001, 0.0001^2)
+
+# fit
+out <- bpsvar(y_name, formulas, d, lags = 4, init = init, iter = iter, warmup = warmup, noise_size = noise_size, scale = scale)
+saveRDS(out, file = "experiment/out.rds")
+readRDS("experiment/out.rds")
+
+n_sample <- (iter - warmup) * 2 # two chains
+
+# check some of the parameter
+a_1 <- out$a[,1]
+a_10 <- out$a[,10]
+a_20 <- out$a[,20]
+a_30 <- out$a[,30]
+
+b_1 <- out$b[,1]
+b_3 <- out$b[,3]
+b_5 <- out$b[,5]
+b_9 <- out$b[,9]
+
+sgt_1 <- out$sgt[,1]
+sgt_6 <- out$sgt[,6]
+
+mu_1 <- out$ze_mu[,1]
+mu_4 <- out$ze_mu[,4]
+
+sigma_1 <- out$ze_sigma[,1]
+sigma_4 <- out$ze_sigma[,4]
+
+
+df_long <- data.frame(
+  name = c(rep("a_1", n_sample), rep("a_10", n_sample), rep("a_20", n_sample),
+           rep("a_30", n_sample), rep("b_1", n_sample), rep("b_3", n_sample),
+           rep("b_5", n_sample), rep("b_9", n_sample), rep("sgt_1", n_sample),
+           rep("sgt_6", n_sample), rep("mu_1", n_sample), rep("mu_4", n_sample),
+           rep("sigma_1", n_sample), rep("sigma_4", n_sample)),
+  value = c(a_1, a_10, a_20, a_30, b_1, b_3, b_5, b_9, sgt_1, sgt_6, mu_1,
+            mu_4, sigma_1, sigma_4)
+)
+
+
+p <- df_long %>%
+  ggplot(aes(x=value, fill=name)) +
+  geom_histogram(alpha=0.5, bins = 50) +
+  facet_wrap(~name, scale = "free", ncol=2) +
+  labs(x = "", y = "", title = "", subtitle = "") +
+  theme_minimal() +
+  theme(legend.position = "none")
+p
+
+ggsave(plot=p, filename="experiment/posteriors.png", bg = "white")
+
+## visualisation of Impulse Response Function
+
+b_save_vec <- out$b
+a_save_vec <- out$a
+
+n <- 3; lags <- 4; hor <- 20
+
+scale = c(-5.667, 10.934, 1)
+
+scale1 <- median(b_save_vec[, 1])
+scale2 <- median(b_save_vec[, n + 2])
+scale3 <- median(b_save_vec[, 2 * n + 3])
+
+S <- dim(b_save_vec)[1]
+
+irf_mat_all_draws <- array(0, dim = c(n, n, hor, S))
+
+for (s in 1:S){
+  irf_mat <- array(0, dim = c(n, n, hor + lags + 1))
+  b_draw <- matrix(b_save_vec[s, 1:n ^ 2], n, n, byrow = FALSE)
+
+  b_draw[, 1] <- (b_draw[, 1] / scale1) * scale[1]
+  b_draw[, 2] <- (b_draw[, 2] / scale2) * scale[2]
+  b_draw[, 3] <- (b_draw[, 3] / scale3) * scale[3]
+
+  irf_mat[, , lags] <- b_draw
+  beta <- matrix(0, n * lags, n)
+  reshapebeta <- matrix(a_save_vec[s, ], n, lags * n)
+
+  for (ll in (1:lags)){
+    beta[(1 + (ll - 1) * n):(n + (ll - 1) * n),] <- t(reshapebeta[, (n * lags - n + 1 - (ll - 1) * n):(n * lags - (ll - 1) * n)])
+  }
+
+  for (kk in (lags:(hor + lags))){
+    helper <- aperm(irf_mat[, , kk:(kk - (lags - 1))], c(1, 3, 2))
+    helper <- matrix(helper, nrow(matrix(helper)) / n, n)
+    irf_mat[, , kk + 1] <- t(beta) %*% helper
+  }
+  irf_mat_all_draws[, , , s] <- irf_mat[, , lags:(hor + lags - 1)]
+}
+
+irf_ub <- prctile(irf_mat_all_draws, 0.84, 4)
+irf_lb <- prctile(irf_mat_all_draws, 0.16, 4)
+D_irf_median <- prctile(irf_mat_all_draws, 0.5, 4)
+
+irf_diff <- drop(irf_mat_all_draws[3, 2, , ]  - irf_mat_all_draws[3, 1, ,])
+irf_diff_ub <- prctile(irf_diff, 0.84, 2)
+irf_diff_lb <- prctile(irf_diff, 0.16, 2)
+D_diff_irf_median <- prctile(irf_diff, 0.5, 2)
+
+# Tax multiplier
+b2_1 <- drop(irf_lb[3, 1, ])
+b3_1 <- drop(irf_ub[3, 1, ])
+a1 <- drop(D_irf_median[3, 1, ])
+
+# Spending multiplier
+b2_2 <- drop(irf_lb[3, 2, ])
+b3_2 <- drop(irf_ub[3, 2, ])
+a2 <- drop(D_irf_median[3, 2, ])
+
+# Spending minus tax multiplier
+b2_3 <- irf_diff_lb
+b3_3 <- irf_diff_ub
+a3 <- D_diff_irf_median
+
+
+data <- data.frame(
+  x = 1:20,
+  b2_1 = b2_1, b3_1 = b3_1, a1 = a1,
+  b2_2 = b2_2, b3_2 = b3_2, a2 = a2,
+  b2_3 = b2_3, b3_3 = b3_3, a3 = a3
+)
+
+# plot
+p1 <- ggplot(data, aes(x = x)) +
+    geom_line(aes(y = a1, color = "red")) +
+    geom_ribbon(aes(ymin = b2_1, ymax = b3_1), fill = "red", alpha = 0.2) +
+    labs(y = "Response", x = "Time") +
+    ggtitle("Tax multiplier") +
+    theme_minimal() +
+    theme(legend.position = "none")
+
+p2 <- ggplot(data, aes(x = x)) +
+  geom_line(aes(y = a2, color = "red")) +
+  geom_ribbon(aes(ymin = b2_2, ymax = b3_2), fill = "red", alpha = 0.2) +
+  labs(y = "Response", x = "Time") +
+  ggtitle("Spending multiplier") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+p3 <- ggplot(data, aes(x = x)) +
+  geom_line(aes(y = a3, color = "red")) +
+  geom_ribbon(aes(ymin = b2_3, ymax = b3_3), fill = "red", alpha = 0.2) +
+  labs(y = "Response", x = "Time") +
+  ggtitle("Spending minus tax multiplier") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+irf_plot <- p1 + p2 + p3 + plot_layout(width = c(2, 2, 2), heights = c(1, 1, 1))
+irf_plot
+
+ggsave(plot=irf_plot, filename="experiment/irf.png", bg = "white")
+
+
+

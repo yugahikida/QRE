@@ -1,0 +1,80 @@
+##------------------------
+#
+# Sessionscript 02 May 2024
+#
+##------------------------
+# import data
+# handle data
+# save script and environment
+# transform variables
+
+# Set working directory
+##-------------------------------
+setwd("C:/Users/Name.../RUB/SeminarQRE")
+
+
+# Import excel file as data frame into your enviroment
+##-------------------------------
+#install.packages("readxl") # If you're not already having this package install now
+library(readxl)
+inkar_data_from_website <- read_excel("inkar_data_from_website.xlsx")
+
+# alternatively via drop-down on the right "Import Dataset" - "From Excel..."
+
+
+# rename data frame
+inkar <- inkar_data_from_website
+
+# remove old data frame
+rm(inkar_data_from_website)
+
+# remove more than one objects
+rm(one_object, two_objects)
+
+# remove everything in your environment
+rm(list=ls())
+
+# remove columns
+inkar$Aggregat <- NULL
+
+# rename columns
+inkar$Name <- inkar$Raumeinheit
+
+# remove old column
+inkar$Raumeinheit <- NULL
+
+##------------------------------
+## You have to save both the script and the environment separately and manually!
+## There is no autosave function!
+##------------------------------
+
+# save script
+# click on the floppy disk symbol above!
+
+# save complete environment
+save.image("C:/Users/Name.../RUB/SeminarQRE/session2.RData")
+
+# save object from environment
+save(inkar, file="C:/Users/Name.../RUB/SeminarQRE/inkar.RData")
+
+# load dataset from last session
+load("session2.RData")
+
+# Variable transformations
+##-------------------------------
+# logarithm
+inkar$logEMP2013 <- log(inkar$EMP2013)
+
+
+# subtract 1 million
+#inkar$ITEMP2013 <- inkar$ITEMP2013-1000000
+
+# decide which variable needs which transformation and
+# note to remember which transformation you did!
+# Also it's not wrong to keep the un-transformed ones in the data frame
+# for additional info
+
+# Subsets
+##-------------------------------
+# Make a new subset of data frame 
+new_inkar <- inkar[c(9, 17, 25, 33)]

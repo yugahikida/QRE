@@ -1,0 +1,1 @@
+{"frames":[],"message":"Error in plot_lambda_conf_int(fit3$arcoef, fit3$vcov.arcoef, 1.96)/plot_summs(fit3_vis,  : \n  non-numeric argument to binary operator\n"}

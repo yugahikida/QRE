@@ -1,0 +1,174 @@
+---
+title: "Amortized adaptive experimental design for multiple candidate models"
+author: "Yuga Hikida"
+institute: "TU Dortmund University"
+fontsize: 16pt
+format: 
+  beamer:
+    incremental: false
+    theme: "metropolis"
+    aspectratio: 169
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+## Experimental design
+
+\begin{align}
+  \theta &\sim p(\theta) \\
+  \xi &\sim \text{DesignGenetator} \\
+  y &\sim p(y \mid \theta, \xi)
+\end{align}
+
+We optimise the design $\xi$ of an experiment, which yields an outcome $y$, to get maximum 
+information about the parameter $\theta$ of model $m$.
+
+We have limited resources $T$.
+
+Simplest case: Linear model
+
+$$
+y_i = \xi_i \theta + \epsilon_i
+$$
+
+## Idea
+
+1. Choose $\xi$ that maximises the *Expected Information Gain* about 
+$\theta$.
+
+2. We want to use all the past data $\{x_i, y_i\}_{i=1}^{\tau}$ to choose the next 
+design $\xi_{\tau + 1}$ adaptively.
+
+3. We want to choose the next design *fast* to enable real-time applications.
+
+
+## Problem
+
+We use a "model" to
+
+1. Choose the next design $\xi_{\tau + 1}$.
+
+2. Learn the parameters $\theta$ of that "model".
+
+$\Rightarrow$ Model misspecification has detrimental consequences!
+
+- Wrong experimental design to learn parameters of wrong model...
+
+## Example of model misspecificatoin considered
+
+- Wrong degree of complexity of model
+
+  + $\xi_i \theta$ vs.  $\xi_i \theta_1 + \xi_i^2 \theta_2$?
+  
+- Wrong choice of covariates
+
+  + $\xi_i \theta + z_{1i} \beta_1 + z_{2i} \beta_2 + \dots$
+  
+## Solution
+
+\large
+Learn model $m$ and its parameters $\theta_m$ simultaneously through 
+simulated experiments from the forward joint model.
+
+\normalsize
+Example:
+
+$m_1$: $y_i = \xi_i \theta_1 + \epsilon_i$
+
+$m_2$: $y_i = \xi_i \theta_1 + \xi_i^2 \theta_2 + \epsilon_i$
+
+$m_3$: $y_i = \xi_i \theta_1 + \xi_i^2 \theta_2  +  \xi_i^3 \theta_3 + \epsilon_i$
+
+
+## Objective function
+
+Expected Information Gain (EIG) about $(m, \theta_m)$ follows as:
+
+\begin{align}
+\text{EIG}_{(m, \theta_m)}(\xi) &=  E_{p(y \mid \xi)} \left[ H[p(m,\theta_m)] - H[p(m, \theta_m \mid y, \xi)]  \right] \\
+&= E \left[ \log \frac{p(y \mid m, \theta_m, \xi)}{\sum_m \int_{\theta_m} p(y, m, \theta_m \mid \xi) d \theta_m} \right]
+\end{align}
+
+where the second expectation is over $m, \theta_m, y \sim p(m, \theta_m, y \mid \xi) = p(m)p(\theta_m \mid m) p(y \mid \theta_m, m, \xi)$.
+
+This is a reduction in entropy $H$ in the joint distribution of $(m, \theta_m)$ after the experiment.
+
+## Making it adaptive and amortised
+
+When we observe the experiment history up to time $\tau$: 
+$h_{\tau} = \{\xi_i, y_i\}_{i=1}^{\tau}$, we want to incorporate 
+them to choose the next design $\xi_{\tau + 1}$.
+
+\begin{align}
+  \xi_{\tau + 1}^* = \text{argmax}_{\xi_{\tau + 1}} \text{EIG}_{(m, \theta_m \mid h_{\tau})}(\xi_{\tau + 1})
+\end{align}
+
+where now the expectation is over the posterior 
+
+$m, \theta_m, y \sim p(m \mid h_{\tau})p(\theta_m \mid m, h_{\tau})p(y \mid \theta_m, m, h_{\tau}, \xi_{\tau + 1})$
+
+Obtaining posterior samples is usually expensive and slow.
+
+$\Rightarrow$ We use the neural (learned) amortized posterior $q_{\psi}(m, \theta_m \mid h_{\tau})$!
+
+## Another amortisation
+
+EIG is very expensive to calculate!
+
+$\Rightarrow$ We can find a *lower bound* for $\text{EIG}_{(m, \theta_m \mid h_{\tau})}(\xi_{\tau + 1})$.
+which we call $L_{(m, \theta_m \mid h_{\tau})}(\xi_{\tau + 1})$.
+
+Train a design network $\pi_{\phi}$:
+
+\begin{align}
+  \pi_{\phi}(h_{\tau}) = \xi_{\tau + 1}^*
+\end{align}
+
+such that it maximises $L_{(m, \theta_m \mid h_{\tau})}(\xi_{\tau + 1})$
+w.r.t $\xi_{\tau + 1}$ and $\phi$ jointly.
+
+
+## Whole picture {.plain}
+\makebox[\textwidth]{\includegraphics[width=\paperwidth,height=\paperheight]{img/whole_pic.png}}
+
+
+## Pilot experiment
+Amortization over model, parameters, and $T$ (number of observation) with 
+random design: $x_j \sim  \text{normal} (0, c)$. For $i=1,...,T$,
+
+\begin{align}
+  y_i = \theta_1 x_{1i} + \theta_2 x_{2i} + \theta_3 x_{3i} + \theta_4 x_{4i} + \epsilon_i
+\end{align}
+
+We simultaneously amortize over four models and their parameters.
+
+$m_1$: Only $\theta_1$. Others are zero.
+
+$m_2$: Only $\theta_1, \theta_2$. Others are zero.
+
+...
+
+Objective: Posterior (means) recover the true parameter.
+
+## Result
+
+- $1000$ simulations.
+- Good parameter recovery: amortization works over models and their parameters.
+- Random design is enough for such simple model.
+![True parameter / posterior mean](img/recovery.png)
+
+
+## Next steps
+
+- Train amortized posterior and design network jointly.
+- Application to more realistic model (e.g., Hyperbolic temporal discounting)
+
+
+
+
+
+

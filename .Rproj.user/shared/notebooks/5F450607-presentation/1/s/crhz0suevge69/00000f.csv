@@ -1,0 +1,15 @@
+"0","plot_lambda_conf_int(fit3$arcoef, fit3$vcov.arcoef, 1.96) / plot_summs(fit3_vis, robost  = TRUE) + plot_layout(height  = c(1, 13))
+"
+"2","Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+Please use `linewidth` instead."
+"2","Loading required namespace: broom.mixed
+"
+"2","Failed with error:  "
+"2",""
+"2","‘there is no package called ‘broom.mixed’’"
+"2",""
+"2","
+"
+"2","Error in plot_lambda_conf_int(fit3$arcoef, fit3$vcov.arcoef, 1.96)/plot_summs(fit3_vis,  : 
+  non-numeric argument to binary operator
+"

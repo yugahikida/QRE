@@ -1,0 +1,601 @@
+---
+title: "What makes wine great?"
+author: "Yuga Hikida, Adya Maheshwari"
+date: "2024-01-30"
+fontsize: 12pt
+output: 
+  beamer_presentation:
+  theme: "Boadilla"
+  innertheme: "circles"
+header-includes:
+  - \definecolor{UBCblue}{rgb}{0.04706, 0.13725, 0.26667} % UBC Blue (primary)
+  - \usecolortheme[named=UBCblue]{structure}
+  - \setbeamercolor{frametitle}{fg=white,bg=UBCblue}
+  - \setbeamercolor{titlelike}{parent=structure,fg=UBCblue}
+  - \setbeamertemplate {footline}{\quad\hfill\insertframenumber\strut\quad}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r include = FALSE}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(bayesplot)
+library(brms)
+library(patchwork)
+library(latex2exp)
+```
+
+
+```{r include = FALSE}
+theme_set(theme_minimal() +
+theme(axis.text = element_text(size=15),
+      axis.title = element_text(size = 20),
+      legend.title = element_text(size=20),
+      legend.text = element_text(size = 20),
+      strip.text = element_text(size=20),
+      plot.title = element_text(size = 20)
+      ))
+```
+
+
+
+```{r include = FALSE}
+linear_reg <- readRDS("results/short_liner_reg.rds")
+cumlat <- readRDS("results/short_cumulative.rds")
+cumlat_s <- readRDS("results/short_cumulative_with_spline.rds")
+```
+
+
+```{r include = FALSE}
+d <- read.csv("data/winequality-white.csv", sep = ";")
+```
+
+## Task
+
+- Prediction of quality of (white) wine (from 1, 2,.. up to 10) using physicochemical variables.
+- Actually only from 3 to 9 is observed.
+- Data source: Cortez,Paulo, Cerdeira,A., Almeida,F., Matos,T., and Reis,J.. (2009). Wine Quality. UCI Machine Learning Repository. https://doi.org/10.24432/C56S3T.
+- Support vector machine is used in their introductory paper.
+```{r fig.width=3, fig.height = 2}
+ggplot(d, aes(x = factor(quality))) +
+  geom_bar(stat = "count", alpha = 0.7) +
+  labs(title = "", x = "", y = "count") +
+  theme_minimal()
+```
+
+\scriptsize	
+Figure 1: Histogram of quality
+
+## Data: Predictive variables
+
+- Acidity: citric.acid, volatile.acidity
+- Sweetness: residual.sugar
+- Bitterness: sulphates
+- Saltiness: chlorides
+- Prevent oxidation and bacteria: total.sulfur.dioxide
+- Literally interpretable: alcohol
+
+## Data: Preditictive variables
+
+```{r}
+df_long <- d %>%
+  select(citric.acid, volatile.acidity, residual.sugar, sulphates, chlorides, total.sulfur.dioxide, alcohol) %>%
+  tidyr::gather(key = "variable", value = "value")
+
+ggplot(df_long, aes(x = value, fill = variable)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~variable, scale = "free") +
+  labs(x = "", y = "", title = "", subtitle = "") +
+  theme(legend.position = "none")
+```
+\scriptsize	
+Figure 2: Density of predictive variables
+
+## How to model "quality"?
+
+1. Categorical variable. $quality \in \{`1`, ..., `10` \}$
+
++ Classification
+  
+2. Continuous variable. $quality \in \lbrack1, 10 \rbrack$
+
++ Linear Regression
+  
+3. Ordered Categorical variable. $quality \in \{1, ..., 10 \}$
+
++ Ordinal Regression
+
+We want to retain ordered structure of data for interpretation.
+
+  $\Rightarrow$ Linear Regression (baseline) and Ordinal Regression
+  
+For following slides, $y$ for $quality$ and $x$ for (vector of) predictive variables.
+
+<!-- ## $M_1$: Classification (1) -->
+<!-- \[ -->
+<!-- \begin{aligned} -->
+<!--  y &\sim \text{categorical}(\psi_1,...,\psi_C)  -->
+<!--    &= \prod_{c=1}^{C} \psi_c^{I_{c(y)}} -->
+<!-- \end{aligned} -->
+<!-- \] -->
+
+<!-- where $C$ is the number of categories ($C = 7$ for our case), $\psi_c = Pr(y = c)$ such that $\sum_{c=1}^{C} \psi_c^{I_c(y)} = 1$, and -->
+
+<!-- $$ -->
+<!--  I_{c(y)} = -->
+<!--     \begin{cases}  -->
+<!--     1 & y = c \\ -->
+<!--     0 & \text{otherwise} -->
+<!--     \end{cases} -->
+<!-- $$ -->
+
+<!-- ## $M_1$: Classification (2) -->
+<!-- For $c = 1,..,C$: -->
+<!-- \[ -->
+<!-- \begin{aligned} -->
+<!--  \psi_c &= \text{softmax}(\eta_c) \\ -->
+<!--   &= \frac{e^{\eta_c}}{\sum_{k=1}^{C} e^{\eta_k}} \\ -->
+<!--  \eta_c &= X_c\beta_c \;\; \text{where}  \;\; X_c = X[y == c] \\ -->
+<!--  \beta_c &\sim \text{Normal}(0, \sigma^2I) -->
+<!-- \end{aligned} -->
+<!-- \] -->
+
+<!-- ```{r eval=FALSE, echo = TRUE} -->
+<!-- f <- quality ~ citric.acid + residual.sugar + -->
+<!--    total.sulfur.dioxide + free.sulfur.dioxide +  -->
+<!--    chlorides + density + pH + sulphates + alcohol +  -->
+<!--    fixed.acidity + volatile.acideity -->
+
+<!-- fit1 <- brm(f,  -->
+<!--             data = d,  -->
+<!--             family = categorical(link = "logit"), -->
+<!--             prior = p1) -->
+<!-- ``` -->
+
+
+<!-- ## $M_1$: Result (1) -->
+
+<!-- ```{r message = FALSE} -->
+<!-- var_look_1 <- "residual.sugar" -->
+<!-- pl1_1 <- mcmc_areas(fit1, paste("b_mu", 4:9, "_", var_look_1, sep = "")) + -->
+<!--          scale_y_discrete(labels = paste(4:9)) + -->
+<!--          labs(y = paste("beta for", var_look_1)) -->
+
+<!-- var_look_2 <- "alcohol" -->
+<!-- pl1_2 <- mcmc_areas(fit1, paste("b_mu", 4:9, "_", var_look_2, sep = "")) + -->
+<!--          scale_y_discrete(labels = paste(4:9)) + -->
+<!--          labs(y = paste("beta for", var_look_2)) -->
+
+<!-- pl1_1 + pl1_2 -->
+<!-- ``` -->
+
+<!-- ## $M_1$: Result (2) -->
+
+<!-- ```{r include = FALSE} -->
+<!-- pl1_5 <- plot(conditional_effects(fit1, effects = var_look_1, method = "posterior_epred", categorical = TRUE))[[1]] -->
+<!-- pl1_6 <- plot(conditional_effects(fit1, effects = var_look_2, method = "posterior_epred", categorical = TRUE))[[1]] -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- (pl1_5 + theme(legend.position = "none")) + pl1_6 -->
+<!-- ``` -->
+
+## Regression
+As a baseline model.
+\[
+\begin{aligned}
+ y &\sim \text{Normal}(\eta, \gamma) \\
+ \eta &= x^T\beta \\
+ \beta_j &\sim \text{Normal}(0, \sigma_{\beta_j}) \\
+ \gamma &\sim \text{Half-normal}(0, \sigma_\gamma)
+\end{aligned}
+\]
+
+\footnotesize
+```{r eval=FALSE, echo = TRUE, fig.width=2, fig.height=2}
+f <- quality ~ citric.acid + volatile.acidity + 
+     residual.sugar + sulphates + chlorides + 
+     total.sulfur.dioxide + alcohol
+
+linear_reg <- brm(f, 
+              data = d,
+              family = gaussian(),
+              prior = p_linear_reg)
+```
+\normalsize
+
+## Prior Specification
+
+* Focus on "alcohol": It takes from 8\% to 14\% (the range is 6\%)
+* The response takes from 3 to 9 (the range is 6)
+* We don't expect the absolute value of coefficient to be larger than 1.
+* Set weakly informative prior accordingly: $\beta_{alcohol} \sim \text{Normal}(0, 0.4)$
+
+```{r include = FALSE}
+pl_resp <- ggplot(d, aes(x = factor(quality))) +
+          geom_bar(stat = "count", alpha = 0.7) +
+          labs(title = "", x = "", y = "count") +
+          ggtitle("quality") +
+          theme_minimal()
+  
+pl_alc <- ggplot(d, aes(x = (alcohol))) +
+          geom_density(alpha = 0.7, color = "black", fill = "lightpink2") +
+          labs(title = "", x = "", y = "") +
+          ggtitle("alcohol") +
+          theme_minimal()
+pl_prior_val <- dnorm(seq(-2, 2, length.out=100), 0, 0.4)
+d_prior <-data.frame(beta = seq(-2, 2, length.out=100), density =  pl_prior_val)
+pl_prior <- ggplot(d_prior, aes(x = beta, y = density)) +
+            geom_line() +
+            geom_area(fill = "lightblue", alpha = 0.7) +
+            labs(title = "prior", x = "") +
+            theme_minimal()
+```
+
+```{r fig.width=6, fig.height=2}
+(pl_resp + pl_alc + pl_prior)
+```
+\scriptsize	
+Figure 3: Distribution of (response / predictive) variables and prior distribution.
+
+
+
+## Prior Specification (cont)
+We have
+\[
+\begin{aligned}
+ \beta_{alcohol} &\sim \text{Normal}(0, 0.4) \\
+                  &:= \text{Normal}(0, \tau SD(y)/SD(\text{alcohol}))
+\end{aligned}
+\]
+
+- We get scale free informativeness: $\tau \approx 0.5$
+- Set prior for other variables as informative as coefficient for "alcohol". (i.e., $\beta_j \sim \text{Normal}(0, \tau SD(y)/SD(x_j))$)
+<!-- - For intercept: use $\beta_0 \sim \text{Normal}(6, 5)$. -->
+<!-- - Mean around $E(y)$. -->
+<!-- - Broader than (almost) all prior for coefficients. -->
+<!-- - For $\sigma$: use $\sigma \sim \text{Half-normal}(0, 5)$. -->
+
+```{r}
+pl_mcmc_1 <- mcmc_areas(linear_reg, pars = c("b_alcohol")) 
+
+pl_mcmc_2 <- mcmc_areas(linear_reg, pars = c("b_citric.acid"))
+```
+
+```{r include = FALSE}
+pl_lr_1 <- plot(conditional_effects(linear_reg, "alcohol", method = "posterior_epred"))[[1]]
+pl_lr_2 <- plot(conditional_effects(linear_reg, "citric.acid", method = "posterior_epred"))[[1]]
+# pl_lr_3 <- plot(conditional_effects(linear_reg, "alcohol", method = "posterior_predict"))[[1]]
+# pl_lr_4 <- plot(conditional_effects(linear_reg, "citric.acid", method = "posterior_predict"))[[1]]
+```
+
+## Regression: Result
+
+```{r}
+(pl_lr_1 + labs(title = "Conditional effect") + theme(plot.title = element_text(size = 15)) + pl_mcmc_1 + labs(title = "Posterior distribution") + theme(plot.title = element_text(size = 15))) / (pl_lr_2  + pl_mcmc_2)
+```
+\scriptsize	
+Figure 4: Result for linear regression (only for "alcohol" and "citric.acid")
+
+<!-- ## Regression: Result (2)  -->
+<!-- ```{r include = FALSE} -->
+<!-- pl2_1 <- plot(conditional_effects(fit2, "residual.sugar", method = "posterior_epred"))[[1]] -->
+<!-- pl2_2 <- plot(conditional_effects(fit2, "residual.sugar", method = "posterior_predict"))[[1]] -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- (pl2_1 + labs(title = "Expected value")) / pl2_2 + labs(title = "PP draws") -->
+<!--  ``` -->
+<!-- -->
+
+## Ordinal Regression: Cumulative Model
+Consider a continuous latent variable $\tilde{y}$ which determine the 
+quality $y$ through thresholds $\tau$.
+
+For $c = 2,..,C$: 
+\[
+\begin{aligned}
+Pr(y = c) &= Pr(y \leq c) - Pr(y \leq c - 1) \\
+ &:= Pr(\tilde{y} \leq \tau_c) - Pr(\tilde{y} \leq \tau_{c - 1})
+ \\
+  \tilde{y} &= \eta + \epsilon, \; \epsilon \sim \text{Normal}(0, 1) \\
+\end{aligned}
+\]
+
+Prior is set in the same way as regression (here assume $SD(\tilde{y}) = 1$)
+
+<!-- ## Cumulative Model (cont) -->
+<!-- Other expression: -->
+<!-- \[ -->
+<!-- \begin{aligned} -->
+<!--  Pr(\tilde{y} \leq \tau_c) -->
+<!--  &= Pr(\eta + \epsilon \leq \tau_c) \\ -->
+<!--  &= Pr(\epsilon \leq \tau_c - \eta)  \\ -->
+<!--  &= \Phi(\tau_c - \eta) \;\; \Phi: \text{cdf of standard normal aka probit} -->
+<!-- \end{aligned} -->
+<!-- \] -->
+
+<!-- Then we have: -->
+
+<!-- \[ -->
+<!-- \begin{aligned} -->
+<!--  \psi_c &= \Phi(\tau_c - \eta) - \Phi(\tau_{c - 1} - \eta) -->
+<!-- \end{aligned} -->
+<!-- \] -->
+
+\footnotesize
+```{r eval=FALSE, echo = TRUE}
+cumlat <- brm(f, 
+            data = d,
+            family = cumulative("probit"),
+            prior = p_cumlat)
+```
+
+
+## Cumulative model: Result
+
+```{r include = FALSE}
+pl_cum_1 <- plot(conditional_effects(cumlat, effects = "alcohol", categorical = TRUE, plot = FALSE))[[1]]
+pl_cum_2 <- plot(conditional_effects(cumlat, effects = "alcohol", method = "posterior_linpred", plot = FALSE))[[1]]
+pl_cum_3 <- plot(conditional_effects(cumlat, effects = "citric.acid", categorical = TRUE, plot = FALSE))[[1]]
+pl_cum_4 <- plot(conditional_effects(cumlat, effects = "citric.acid", method = "posterior_linpred", plot = FALSE))[[1]]
+```
+
+```{r}
+(pl_cum_2 + labs(y = TeX(r"(\tilde{y})")) + (pl_cum_1 + theme(legend.position = "none"))) / (pl_cum_4 + labs(y = TeX(r"(\tilde{y})")) + pl_cum_3 )
+```
+\scriptsize	
+Figure 5: Result for cumulative model (only for "alcohol" and "citric.acid")
+
+
+## Cumulative model: Non-equidistant
+
+Linear regression implicitly assumes equidistant among categories (quality).
+
+```{r fig.width=7, fig.height=4}
+cumlat_df <- as.data.frame(cumlat)
+cumlat_df %<>%
+  select("b_Intercept[1]", "b_Intercept[2]", "b_Intercept[3]", 
+        "b_Intercept[4]", "b_Intercept[5]","b_Intercept[6]") %>%
+  pivot_longer(everything())
+
+cumlat_df %>% ggplot(aes(x = value, fill=name)) +
+              geom_density(alpha=0.5) +
+              xlab(TeX(r"(\tau)")) +
+              scale_fill_manual(
+                       values = c("#7CAE00", "#00BE67", "#00BFC4", "#00A9FF", "#C77CFF", "#FF61CC"),
+                       name="threshold",
+                       breaks=c("b_Intercept[1]", "b_Intercept[2]", "b_Intercept[3]", 
+                                "b_Intercept[4]", "b_Intercept[5]","b_Intercept[6]"),
+                       labels=unname(TeX(c(r"(\tau_3)", r"(\tau_4)", r"(\tau_5)",
+                                           r"(\tau_6)", r"(\tau_7)",r"(\tau_8)"))))
+```
+
+\scriptsize
+Figure 6: Posterior distribution for the thresholds $\tau_c$
+
+## Model Comparison
+
+Leave-one-out Cross Validation
+\footnotesize
+```{r warning=FALSE, message=FALSE, echo = TRUE, comment = ""}
+loo_compare(linear_reg, cumlat)
+```
+
+\normalsize
+* Need to be carefully interpreted: 
+  + We modelled $y$ differently.
+* Cumulative model has higher ELPD.
+  + We continue further analysis with cumulative model.
+
+<!-- Posterior Model Probability -->
+<!-- ```{r warning=FALSE, message=FALSE, echo = TRUE, comment = "", results = FALSE} -->
+<!-- pmp <- post_prob(fit1, fit2, fit3) -->
+<!-- ``` -->
+
+<!-- ```{r, comment = ""} -->
+<!-- pmp -->
+<!-- ``` -->
+
+## Adding non-linearity
+```{r include = FALSE}
+pl_zero_1 <- mcmc_areas(linear_reg, pars = c("b_residual.sugar", "b_total.sulfur.dioxide")) +
+  theme_minimal()
+pl_zero_2 <- mcmc_areas(cumlat, pars = c("b_residual.sugar", "b_total.sulfur.dioxide")) +
+            theme_minimal() +
+            theme(axis.text.y = element_blank())
+```
+
+
+
+```{r fig.width=6, fig.height=2.5}
+pl_zero_1 + labs(title = "Linear Regression") + pl_zero_2 + labs(title = "Cumulative model")
+```
+
+\scriptsize
+Figure 7: Posterior distributions from the two models.
+\normalsize
+
+- Coefficient for "residual.sugar" and "total.sulfur.dioxide" is concentrated in very small value or around zero.
+- Might be due to non-linearity $\Rightarrow$ use spline for the two variables.
+- Does "optimal" value exist within the range of data we observed?
+
+
+
+## Spline: Result
+
+```{r include = FALSE}
+pl_cum_s_1 <- plot(conditional_effects(cumlat_s, effects = "residual.sugar", method = "posterior_linpred", plot = FALSE))[[1]]
+pl_cum_s_2 <- plot(conditional_effects(cumlat_s, effects = "total.sulfur.dioxide", method = "posterior_linpred", plot = FALSE))[[1]]
+```
+
+```{r}
+pl_cum_s_1 + labs(y = TeX(r"(\tilde{y})")) + pl_cum_s_2 + labs(y = TeX(r"(\tilde{y})"))
+```
+\scriptsize	
+Figure 8: Result for cumulative model with spline (only variables with spline term)
+
+## Model Comparison
+
+Leave-one-out CV
+\footnotesize
+```{r warning=FALSE, message=FALSE, echo = TRUE, comment = ""}
+loo_compare(linear_reg, cumlat, cumlat_s)
+```
+\normalsize
+- Adding non-linearity improves ELPD.
+
+<!-- ## Category Specific effect -->
+<!-- - One variable might matter more for lower-quality wine to be higher quality. -->
+<!-- - This variable might matter less for higher-quality wine to be even higher. -->
+<!-- - e.g: `alcohol` is important for wine with quality `3` to get quality `4`. But this effect diminishes for wine with quality `7` to be get quality `8`. -->
+
+
+<!-- ## Sequential model with category Specific effect -->
+<!-- Now latent variable represent transition from one category to another. -->
+
+<!-- $\tilde{y}_c$ determines transition from category $c$ to $c+1$. -->
+
+<!-- \[ -->
+<!-- \begin{aligned} -->
+<!--  Pr(y = c) -->
+<!--  &:= Pr(\tilde{y}_1 > \tau_1) \cdots Pr(\tilde{y}_{c-1} > \tau_{c-1}) Pr(\tilde{y}_c \leq \tau_c)\\ -->
+<!--  &= Pr(\tilde{y}_c \leq \tau_c)\prod_{j=1}^{c-1}Pr(\tilde{y}_{j} > \tau_{j}) \\ -->
+<!--  \tilde{y}_{c} &:= \eta_c + \epsilon_c \\ -->
+<!--  &= X_c\beta_c +  \epsilon_c \\ -->
+<!--  &\text{where }~~ \epsilon_c \sim p(\cdot), ~~ X_c := X[y == c] -->
+<!-- \end{aligned} -->
+<!-- \] -->
+
+<!-- ## Sequential model with category Specific effect -->
+<!-- Again we get other expression without the latent variable -->
+
+<!-- \[ -->
+<!-- \begin{aligned} -->
+<!--  Pr(y = c) -->
+<!--  &= Pr(\eta_c + \epsilon_c \leq \tau_c)\prod_{j=1}^{c-1}Pr(\eta_c + \epsilon_j > \tau_{j}) \\ -->
+<!--  &= Pr(\epsilon_c \leq \tau_c - \eta) \prod_{j=1}^{c-1}(1 - Pr(\epsilon_j \leq \tau_j - \eta_c)) \\ -->
+<!--  &= F(\tau_c - \eta_c) \prod_{j=1}^{c-1}(1 - F(\tau_j - \eta_c)) \\ -->
+<!-- \end{aligned} -->
+<!-- \] -->
+
+<!-- maybe model comparison first and then -->
+
+<!-- dont need model interpretation for gaussian? -->
+
+<!-- different kinds of ordinal model to model the category specific effect -->
+
+<!-- interpretation focus on few variables -->
+
+<!-- be careful about continuous vs discrete -->
+
+<!-- prior sensitivity check -->
+
+
+<!-- - acidity: citric.acid, pH, fixed.acidity, volatile.acidity -->
+<!-- - sweetness: residual.sugar, -->
+<!-- - bitterness: sulphates -->
+<!-- - saltiness: chlorides -->
+<!-- - avoid oxidation and bacterial: total.sulfur.dioxide, free.sulfur.dioxide -->
+<!-- - literally interpretable: alcohol, density -->
+
+<!-- - maybe: remove free.sulfur.dioxide and density <- having high correlation -->
+
+## Summary
+* Positive effect of alcohol and negative effect of citric.acid on quality of wine.
+* Ordinal Regression with Spline perform the best in terms of ELPD.
+* Non-equidistant of quality 
+    + Lower quality wine tends to be more similar 
+    
+      (quality 3, 4, and 5).
+* Non-linear relationship between predictive variables and the quality.
+    + The "optimal" values exist within the data rage observed 
+    
+      (total.sulfur.dioxide).
+* Further analysis: more non-linearity and synergy effects.
+
+\vspace{12pt}
+\hrule
+\scriptsize
+Yuga Hikida: yuga.hikida@tu-dortmund.de
+
+Adya Maheshwari: adya.maheshwari@tu-dortmund.de
+
+
+# Appendix
+## Summary: Regression
+\tiny
+```{r message = FALSE, comment = ""}
+summary(linear_reg)
+```
+
+## Summary: Cumulative model
+\tiny
+```{r, warning=FALSE, comment = ""}
+summary(cumlat)
+```
+
+## Summary: Cumulative with Spline
+\tiny
+```{r, warning=FALSE, comment = ""}
+summary(cumlat_s)
+```
+
+## Prior Summary: Regression
+\tiny
+```{r message = FALSE, comment = ""}
+prior_summary(linear_reg)
+```
+
+## Prior Summary: Cumulative
+\tiny
+```{r message = FALSE, comment = ""}
+prior_summary(cumlat)
+```
+
+## Prior Summary: Cumulative with Spline
+\tiny
+```{r message = FALSE, comment = ""}
+prior_summary(cumlat_s)
+```
+
+
+## Cumulative Model (cont)
+Other expression:
+\[
+\begin{aligned}
+ Pr(\tilde{y} \leq \tau_c)
+ &= Pr(\eta + \epsilon \leq \tau_c) \\
+ &= Pr(\epsilon \leq \tau_c - \eta)  \\
+ &= \Phi(\tau_c - \eta) \;\; \Phi: \text{cdf of standard normal aka probit}
+\end{aligned}
+\]
+
+Then we have:
+
+\[
+\begin{aligned}
+ \psi_c &= \Phi(\tau_c - \eta) - \Phi(\tau_{c - 1} - \eta)
+\end{aligned}
+\]
+
+## Adding non-linearity with Spline
+\footnotesize
+```{r eval=FALSE, echo = TRUE}
+f_s <- quality ~ citric.acid + volatile.acidity + 
+       sulphates + chlorides + alcohol +
+       s(residual.sugar) + s(total.sulfur.dioxide)
+
+cumlat_s <- brm(f_s,
+            data = d,
+            family = cumulative("probit"),
+            prior = p_cumlat_s)
+```
+
+\normalsize
+- We are particularly interested in non-linearity of these two variables.
+- Other variable could be non-linear.
+

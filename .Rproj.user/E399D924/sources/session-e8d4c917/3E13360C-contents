@@ -1,0 +1,378 @@
+##------------------------
+#
+# Sessionscript 02 May 2024
+#
+##------------------------
+# import data
+# handle data
+# save script and environment
+# transform variables
+
+# Set working directory
+##-------------------------------
+setwd("C:/Users/Name.../RUB/SeminarQRE")
+
+
+# Import excel file as data frame into your enviroment
+##-------------------------------
+#install.packages("readxl") # If you're not already having this package install now
+library(readxl)
+inkar_data_from_website <- read_excel("inkar_data_from_website.xlsx")
+
+# alternatively via drop-down on the right "Import Dataset" - "From Excel..."
+
+
+# rename data frame
+inkar <- inkar_data_from_website
+
+# remove old data frame
+rm(inkar_data_from_website)
+
+# remove more than one objects
+rm(one_object, two_objects)
+
+# remove everything in your environment
+rm(list=ls())
+
+# remove columns
+inkar$Aggregat <- NULL
+
+# rename columns
+inkar$Name <- inkar$Raumeinheit
+
+# remove old column
+inkar$Raumeinheit <- NULL
+
+##------------------------------
+## You have to save both the script and the environment separately and manually!
+## There is no autosave function!
+##------------------------------
+
+# save script
+# click on the floppy disk symbol above!
+
+# save complete environment
+save.image("C:/Users/Name.../RUB/SeminarQRE/session2.RData")
+
+# save object from environment
+save(inkar, file="C:/Users/Name.../RUB/SeminarQRE/inkar.RData")
+
+# load dataset from last session
+load("session2.RData")
+
+# Variable transformations
+##-------------------------------
+# logarithm
+inkar$logEMP2013 <- log(inkar$EMP2013)
+
+
+# subtract 1 million
+#inkar$ITEMP2013 <- inkar$ITEMP2013-1000000
+
+# decide which variable needs which transformation and
+# note to remember which transformation you did!
+# Also it's not wrong to keep the un-transformed ones in the data frame
+# for additional info
+
+# Subsets
+##-------------------------------
+# Make a new subset of data frame 
+new_inkar <- inkar[c(9, 17, 25, 33)]
+
+
+##------------------------
+#
+# Sessionscript 16 May 2024
+#
+##------------------------
+
+# transform variables
+# deal with missings
+# density plotting, correlations
+# OLS, VIF
+
+
+# load dataset from last session
+load("session2.RData")
+
+# Variable transformations
+##-------------------------------
+# Make sure your ID variable is numeric:
+inkar$ID <- as.numeric(as.character(inkar$ID))
+
+
+
+# logarithm
+inkar$logEMP2013 <- log(inkar$EMP2013)
+
+
+
+# subtract 1 million
+#inkar$ITEMP2013 <- inkar$ITEMP2013-1000000
+
+# decide which variable needs which transformation and
+# note to remember which transformation you did!
+# Also it's not wrong to keep the un-transformed ones in the data frame
+# for additional info
+
+
+# Make a new subset of data frame for the correlation analyses
+# does not work for columns with character-type data)
+# here I take all vars from one year by specifying the column numbers
+new_inkar <- inkar[c(9, 17, 25, 33)]
+
+
+
+
+##-------------------------------
+# Deal with missings
+##-------------------------------
+# when there are missings in you data, first check why this is the case.
+# Are there no observation because your variable does not exist in that region?
+# Example: Not in all districts are universities, so there is nothing recordable
+# in these districts.
+
+# Be careful: If there are zeroes: Are those real zeroes or badly treated missings?
+
+
+# impute data because of missings
+install.packages("mice")
+library(mice)
+
+# please google the package for more info about matching
+# algorithms!
+
+# A CART is a predictive algorithm that determines how a
+# given variable’s values can be predicted based on 
+# other values
+
+# impute dataset
+imputed_data <-  mice(inkar, method="cart")
+
+# replace missings in dataset with imputed data
+full_data <- complete(imputed_data)
+
+# check if there are still missings:
+anyNA(full_data)
+
+# rename new dataset
+inkar2 <- full_data
+
+# decide on a naming convention! (see moodle)
+full_data
+full.data 
+
+
+# Density function
+##-------------------------------
+plot(density(inkar$EMP2013))
+
+#par(mar=c(1,1,1,1)) # if error that figure margins are too large just drag window
+# on the left so that it is bigger, or google for examples and more help
+plot(density(inkar$EMP2013))
+plot(density(log(inkar$EMP2013))
+
+# check for each variable and each year
+plot(density(inkar$EMP2014))
+plot(density(inkar$EMP2015))
+# etc...
+
+# decide which variable needs which transformation and
+# note to remember which transformation you did!
+# Also it's not wrong to keep the un-transformed ones in the data frame
+# for additional info
+
+
+# Make a new subset of data frame for the correlation analyses
+# does not work for columns with character-type data)
+# here I take all vars from one year by specifying the column numbers
+
+# generate reduced dataset
+inkar_corr <- inkar2[, c(3:35)]
+
+# calculate correlations
+corr_results <- cor(inkar_corr, method="pearson")
+
+# correlations plot
+install.packages("corrplot")
+library(corrplot)
+corrplot(corr_results, type="upper", order="hclust")
+
+
+# to ensure perfect replicability set a seed with a random number
+# if someone wants to replicate your analyses with the same data, the number of the seed needs to
+# be the same for the exact same outcomes to result
+set.seed(123)
+
+
+
+##-------------------------------
+
+# OLS model: linear model
+
+##-------------------------------
+# just one year at once
+
+# linear model for 2019
+# Y ~ X + X + ...
+
+# log data
+library(tidyverse)
+#library(magrittr)
+lginkar <- inkar2 %>% 
+  mutate_at(2:35, log)
+# please pay attention to zeroes in your data when you log-transform!
+
+
+OLS2019 <- lm(EMP2019 ~ INV2019 + FOR2019, data=lginkar)
+summary(OLS2019)
+
+OLS2018 <- lm(inkar2$EMP2018 ~ inkar2$INV2018 + inkar2$FOR2018)
+summary(OLS2018)
+
+# convert object (tbl) to data frame
+# inkartest <- as.data.frame(inkar)
+
+# check variance inflation factors
+car::vif(OLS2019)
+car::vif(OLS2018)
+# if vif is below 5, then keep variable, otherwise remove due to multicollinearity
+
+
+##------------------------
+#
+# Sessionscript 06 June 2024
+#
+##------------------------
+set.seed(123)
+# log data
+library(tidyverse)
+library(magrittr)
+lginkar <- inkar2 %>% 
+  mutate_at(3:35, log)
+# please pay attention to zeroes in your data when you log-transform!
+
+lginkar[lginkar == "-Inf"] <- 0
+
+
+
+## make geofile 
+#install.packages("sf")  # for information on sf see the following links: 
+# https://github.com/rstudio/cheatsheets/blob/main/sf.pdf & https://r-spatial.github.io/sf/articles/sf5.html
+
+library(sf) 
+shapefile <- sf::st_read("C:/Name.../Quantitative Regional Economics/02 Session/vg2500_krs") 
+shapefile$ARS <- as.numeric(shapefile$ARS)
+shapedata <-data.frame(shapefile)
+geoinkar <- merge(shapedata, inkartest, by.x="ARS", by.y="ID", all.x=T)
+geoinkar <- st_as_sf(geoinkar) 
+
+
+## make maps
+# 1st for descriptive purpose
+
+### default map ----------------------------------------------------------------
+
+#install.packages("ggplot2")
+library(ggplot2)
+#install.packages("viridis")
+library(viridis)
+
+EMP2019map <- ggplot() +
+  geom_sf(data = geoinkar,
+          aes(fill= EMP2019),
+          color ="black", linewidth = 0.25) +
+  scale_fill_viridis(option="magma") + # add direction = -1 after magma scheme and a comma to reverse colors
+  #scale_fill_gradient(low = "red", high = "grey") + # alternative color scheme
+  coord_sf(crs = st_crs(geoinkar))
+
+print(EMP2019map)
+
+
+
+### better breaks for maps -----------------------------------------------------
+# library(ggplot2)
+# library(viridis)
+
+# make quantile breaks
+# make quantiles
+quantile_interval_EMP2019 = quantile(geoinkar$EMP2019, probs = seq(0, 1, by = 1/6))
+
+# cut variable into the quantile breaks
+geoinkar$EMP2019_quantile = cut(geoinkar$EMP2019, breaks = quantile_interval_EMP2019, include.lowest = TRUE)
+
+# new map with breaks
+EMP2019map_q <- ggplot() +
+  geom_sf(data = geoinkar,
+          aes(fill = EMP2019_quantile),
+          color ="black", size = 0.25) +
+  scale_fill_viridis_d(option="magma") +
+  #scale_fill_discrete() +
+  coord_sf(crs = st_crs(geoinkar))
+
+print(EMP2019map_q)
+
+## transform dataset for spatiotemporal model
+
+#install.packages("tidyr")
+library(tidyr) 
+
+### create new long dataset from old, wide dataset------------------------------
+inkarlong <- pivot_longer(lginkar,cols=EMP2009:FOR2019,names_to=c("varname")) 
+
+# function to extract / take year from varname column;
+# take the last "num-char" characters from the character string "text" & put them in a substring
+right = function(text, num_char) {
+  substr(text, nchar(text)-(num_char-1), nchar(text))
+}
+
+# create year column by putting the extracted substrings in a new variable "year"
+inkarlong$year <- right(inkarlong$varname, 4)
+
+# convert the years to numeric
+inkarlong$year <- as.numeric(inkarlong$year)
+
+# delete year from varname column
+inkarlong$varname <- substr(inkarlong$varname, 1, nchar(inkarlong$varname) - 4)
+
+### retransform ----------------------------------------------------------------
+inkarlong <- pivot_wider(inkarlong,names_from = c("varname"))
+
+## Spatial model preparations
+
+install.packages("spdep")
+library(spdep)
+
+### neighbours list-------------------------------------------------------------
+# https://r-spatial.github.io/spdep/articles/nb.html#creating-contiguity-neighbours
+krs_shp_mtrx <- sf::st_read("vg2500_krs")
+# krs_shp_mtrx <- sf::st_read("C:/Name.../Quantitative Regional Economics/02 Session/vg2500_krs")
+
+# function builds a neighbours list based on shared boundaries 
+#(according to queen=T a single shared boundary point is enough)
+krs_mtrx <- poly2nb(krs_shp_mtrx) 
+
+# plot the neigbor-relations
+#options(sf_max.plot=1)# default number of plots is 9
+plot(krs_shp_mtrx$geometry, border="grey60")
+plot(krs_mtrx,krs_shp_mtrx$geometry, add=TRUE, pch=19, cex=0.6) 
+class(krs_mtrx)
+# plot needs as first argument a neighbours list and as a second argument a sfc object
+
+
+### Spatial weights matrix------------------------------------------------------
+# create spatial weights matrix
+# supplement the neighbours list with spatial weights 
+# standard is to form the weight matrix in the style "W" = row-standardized  (sums over all links to n)
+krs_w <- nb2listw(krs_mtrx, style="W")
+
+## Moran's I test------------------------------------------------------
+
+# Do Moran's I to check for presence of spatial autocorrelation.
+# if there is none, you do not need a spatial econometric model!
+
+# check for log-transformed wide dataset (for each year)
+moran.test(lginkar$EMP2019, krs_w)
+# the "Moran I statistic standard deviate" is the z-score: 
+#https://gis.stackexchange.com/questions/364349/morans-i-z-value-in-spdep
+

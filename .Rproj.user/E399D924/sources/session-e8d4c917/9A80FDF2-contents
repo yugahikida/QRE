@@ -1,0 +1,306 @@
+---
+title: "What makes region attractive for worker?"
+author: "Yuga Hikida"
+institute: "TU Dortmund University"
+fontsize: 11pt
+format: 
+  beamer:
+    incremental: false
+    theme: "metropolis"
+bibliography: reference.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r include = FALSE}
+library(tidyr)
+library(dplyr)
+library(mice)
+library(ggplot2)
+library(plm)
+library(splm)
+library(sf)
+library(spdep)
+library(sf)
+library(viridis)
+library(jtools)
+library(patchwork)
+```
+
+
+```{r include = FALSE}
+theme_set(theme_minimal() +
+theme(axis.text = element_text(size=15),
+      axis.title = element_text(size = 20),
+      legend.title = element_text(size=20),
+      legend.text = element_text(size = 20),
+      strip.text = element_text(size=20),
+      plot.title = element_text(size = 20)
+      ))
+```
+
+```{r include = FALSE}
+set.seed(1)
+d_wide <- read.csv("inkar/data.csv")
+
+# Data pre-processing
+col_eng <- c("code_num", "spatial_unit", "year", "employed", "unemployment_rate",
+             "land_price", "employees_academic_degree", "employees_no_qualification",
+             "hospital_bed", "prop_foreigners", "waste_amount", "gdp")
+
+d <- d_wide %>% 
+  slice(-1) %>%
+  select(- Aggregat) %>%
+  pivot_longer(
+    cols = - c(Kennziffer, Raumeinheit),
+    names_to = c(".value", "year"),
+    names_pattern = "(.+?)\\.?(\\d*)$") %>%
+  replace(.=="", "0") %>%
+  setNames(col_eng) %>%
+  mutate(year = recode(year,
+                       "0" = "2015",
+                       "1" = "2016",
+                       "2" = "2017",
+                       "3" = "2018",
+                       "4" = "2019",
+                       "5" = "2020",
+                       "6" = "2021"),
+         d_employed = 100 * (log(employed) - log(dplyr::lag(employed))))%>%
+  filter(year != "2015")
+  
+
+# Impute data
+imputed <- mice(d, method="cart")
+d <- complete(imputed)
+anyNA(d)
+
+# transform some variables
+d <- d %>% mutate(ln_gdp = log(gdp),
+                  sc_land_price = land_price / 1000,
+                  sc_waste_amount = waste_amount / 10000,
+                  year = as.factor(year),
+                  spatial_unit = as.factor(spatial_unit)) %>% as_tibble()
+
+## with shape data
+shapefile <- st_read("vg2500_krs/vg2500_krs.shp")
+shapefile$ARS <- as.numeric(shapefile$ARS)
+
+d_geo <- merge(shapefile, d, by.x = "ARS", by.y = "code_num", all.y = TRUE)
+```
+
+
+## Background
+
+* Determinant of migration of worker [@moretti2011local]
+  + Labour market condition
+    - net wage, unemployment rate...
+  + Amenities 
+    - public goods, facilities...
+
+* **Empirically analyse what makes region attractive for worker.**
+
+* Previous studies: migration decision from various factors
+from both of the channels [@buch2014makes; @hakim2022amenities].
+  + No single strong determinants of migration.
+ 
+## Data
+ * Focus on changes in emplopyees in each region over time.
+ * $y_t := 100 \times \{ \log (\text{employed}_t)  - \log (\text{employed}_{t-1}) \}$
+ * Period: 2016 - 2021
+ * All data is obtained from <https://www.inkar.de/>
+ 
+```{r}
+#| label: map-employed
+#| fig-cap: "Changes in #employed (%)"
+#| fig-subcap:
+#|   - "2016"
+#|   - "2021"
+#| layout-ncol: 2
+
+d_geo %>%
+    filter(year == "2016") %>%
+    mutate(d_employed_q = cut(d_employed, breaks = quantile(d_employed, probs = c(0, 0.20, 0.5, 0.8, 1)), 
+                              include.lowest = TRUE)) %>%
+    ggplot() +
+    geom_sf(aes(fill = d_employed_q)) +
+    scale_fill_viridis_d(option = "magma", direction = -1)
+
+d_geo %>%
+    filter(year == "2021") %>%
+    mutate(d_employed_q = cut(d_employed, breaks = quantile(d_employed, probs = c(0, 0.20, 0.5, 0.8, 1)), 
+                          include.lowest = TRUE)) %>%
+    ggplot() +
+    geom_sf(aes(fill = d_employed_q)) +
+    scale_fill_viridis_d(option = "magma", direction = -1)
+```
+
+
+## Modalities
+
+- `splm` package [@millo2009splm] is used for all the estimation.
+- Maximum likelihood method is used.
+- Statistical testing: 5% significance level.
+ 
+## Explanatory variables
+
+\scriptsize
+\begin{table}[]
+\begin{tabular}{@{}ll@{}}
+\toprule
+Variable name & description \\ \midrule
+GDP per employed & GDP in €1,000 per employed person\\
+Unemployement rate & Share of unemployed people in \% \\
+Land price &  Average purchase values for building land in € per m2 \\
+Proportion of foreigners  & Proportion of foreigners to residents in \% \\
+Amount of waste & Amount of waste disposed of or treated per inhabitant in kg \\
+Hospital beds & Hospital beds per 1,000 inhabitants \\
+\toprule
+\end{tabular}
+\end{table}
+\normalsize
+
+- Some variables are transformed such that scale of all the variables are 
+roughly same.
+- Denoted as $X$ in the following slides.
+
+## Basic panel data model
+
+For region $i=1,...,N$, time $t=1,..,T$:
+
+
+\begin{align*}
+  y_{it} &= \alpha + \beta^T X_{it} + u_{it} \\
+  u_{it} &= \mu_i + \nu_{it} \\
+  \mu_i &\overset{\mathrm{iid}}{\sim} (0, \sigma_\mu) \\
+  \nu_{it} &\overset{\mathrm{iid}}{\sim} (0, \sigma_\nu)
+\end{align*}
+
+where $X_{it} = [x_{it1}, ..., x_{itk}]^T$ and $\beta = [\beta_1,...,\beta_k]^T$.
+
+$\mu_i$ is a group specific effect ("random effect") differs across region 
+which is modelled independently constant over time.
+
+```{r include = FALSE}
+# delete row in shapefile which is not recorded in main data
+setdiff(unique(shapefile$ARS), unique(d$code_num))
+shapefile <- shapefile %>% filter(ARS != 16056)
+  
+# panel data with group specific effect
+d <- d %>% select(- code_num)
+
+f <- d_employed ~ ln_gdp + unemployment_rate + sc_land_price + prop_foreigners +
+  sc_waste_amount + hospital_bed
+  
+fit1 <- plm(f, data = d, model = "random")
+```
+
+## Result
+
+```{r fig.width=7, fig.height=4}
+plot_summs(fit1, robost  = TRUE)
+```
+
+- Counter-intuitive result from economic theory
+- Potential model misspecification?
+
+
+## Adding autoregressive error term
+
+\begin{align*}
+  y_{it} &= \alpha + \beta^T X_{it} + u_{it} \\
+  u_{it} &= \mu_i + \lambda \sum_{j=1, j \neq i}^{N} w_{ij} u_{jt} + \nu_{it}\\
+  \mu_i &\overset{\mathrm{iid}}{\sim} (0, \sigma_\mu) \\
+  \nu_{it} &\overset{\mathrm{iid}}{\sim} (0, \sigma_\nu)
+\end{align*}
+
+where $|\lambda| < 1$ is spatial autoregressive parameters and $w_{ij}$ is the 
+$i,j$ element of $N \times N$ spatial weight matrix.
+
+Now error term is decomposed into three parts: group specific part, 
+autoregressive part and idiosyncratic part.
+
+## Result: Autoregressive error model
+- LM test under the null hypothesis $\lambda = 0$ suggests existence of spatial autocorrelation $\rightarrow$ estimate model with autoregressive error
+
+```{r include = FALSE}
+# panel data with spacially correlated group specific effect
+
+## creating weight matrix
+krs_shp_mtrx <- sf::st_read("vg2500_krs")  %>% filter(ARS != 16056)
+krs_mtrx <- poly2nb(krs_shp_mtrx)
+W <- nb2listw(krs_mtrx, style="W")
+
+test1 <- bsktest(x = f, data = d, listw = W, test = "CLMlambda")
+## adding special error term
+fit2 <- spml(f, data = d, listw = W, model = "random", lag = FALSE)
+
+fit2_vis <- fit1
+fit2_vis$coefficients <- fit2$coefficients; fit2_vis$vcov <- fit2$vcov
+```
+
+```{r fig.width=7, fig.height=4}
+plot_summs(fit2_vis, robost  = TRUE)
+```
+
+## Spatial lag of the dependent variable
+
+\begin{align*}
+  y_{it} &= \alpha + \rho \sum_{j=1, j \neq i}^{N} w_{ij} y_{jt} + \beta^T X_{it} + u_{it} \\
+  u_{it} &= \mu_i + \lambda \sum_{j=1, j \neq i}^{N} w_{ij} u_{jt} + \nu_{it}\\
+  \mu_i &\overset{\mathrm{iid}}{\sim} (0, \sigma_\mu) \\
+  \nu_{it} &\overset{\mathrm{iid}}{\sim} (0, \sigma_\nu)
+\end{align*}
+
+- $|\rho| < 1$ is the effect of spatially lagged dependent variable.
+- Consider so called direct impact and indirect impact (explained later).
+
+## Result: Spatial lag model + spatially correlated error
+
+```{r include = FALSE}
+fit3 <- spml(f, data = d, listw = W, model = "random", lag = TRUE)
+fit3_vis <- fit1
+fit3_vis$coefficients <- fit3$coefficients; fit3_vis$vcov <- fit3$vcov
+
+plot_lambda_conf_int <- function(lambda, vcov_lambda, crit){
+  df <- tibble(var_name = "lagged_y",
+                   Estimate = lambda,
+                   lower = lambda - crit * sqrt(vcov_lambda),
+                   upper = lambda + crit * sqrt(vcov_lambda))
+  ggplot(df, aes(x = Estimate, y = var_name)) +
+    geom_point(size = 3, shape = 1, color = "4AB7FC") +
+    geom_errorbarh(aes(xmin = lower, xmax = upper), height = 0, colour= "#4AB7FC", size = 1) +
+    geom_vline(aes(xintercept = 0), colour = "black", linetype="dotted") +
+    theme(axis.title.y=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.title.x=element_blank(),
+        panel.background = element_rect(fill="white")
+        )+ 
+    theme_minimal()
+}
+```
+
+```{r fig.width=7, fig.height=4}
+plot_lambda_conf_int(fit3$arcoef, fit3$vcov.arcoef, 1.96) / plot_summs(fit3_vis, robost  = TRUE) + plot_layout(height  = c(1, 13))
+```
+
+- Reasonable result from an economics perspective.
+- Statistical significance of lagged term implies potential model 
+misspecification of other two models.
+
+## Direct and indirect effect
+
+
+## References
+\small
+::: {#refs}
+:::
+
+
+
+
+ 
+ 
+ 
