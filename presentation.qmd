@@ -1,7 +1,7 @@
 ---
 title: "What makes region attractive for worker?"
-author: "Yuga Hikida"
-institute: "TU Dortmund University"
+author: Yuga Hikida
+institute: yuga.hikida@tu-dortmund.de
 fontsize: 11pt
 format: 
   beamer:
@@ -102,15 +102,14 @@ d_geo <- merge(shapefile, d, by.x = "ARS", by.y = "code_num", all.y = TRUE)
 
 * **Empirically analyse what makes region attractive for worker.**
 
-* Previous studies: migration decision from various factors
-from both of the channels [@buch2014makes; @hakim2022amenities].
+* Previous studies: migration decision from various factors, both of the channels [@buch2014makes; @hakim2022amenities].
   + No single strong determinants of migration.
  
 ## Data
- * Focus on changes in emplopyees in each region over time.
+ * Focus on % changes in # employees in each region over time.
  * $y_t := 100 \times \{ \log (\text{employed}_t)  - \log (\text{employed}_{t-1}) \}$
  * Period: 2016 - 2021
- * All data is obtained from <https://www.inkar.de/>
+ * All data is obtained from <https://www.inkar.de>
  
 ```{r}
 #| label: map-employed
@@ -143,7 +142,7 @@ d_geo %>%
 - `splm` package [@millo2009splm] is used for all the estimation.
 - Maximum likelihood method is used.
 - Statistical testing: 5% significance level.
-- Code available at <
+- Code available at <https://github.com/yugahikida/QRE>.
  
 ## Explanatory variables
 
@@ -255,7 +254,7 @@ plot_summs(fit2_vis, robost  = TRUE)
 \end{align*}
 
 - $|\rho| < 1$ is the effect of spatially lagged dependent variable.
-- Consider so called direct impact and indirect effect (explained later).
+- Consider so called direct effect and indirect effect (explained later).
 
 ## Result: Spatial lag model + spatially correlated error
 
@@ -297,11 +296,11 @@ y &= (I -  \rho W)^{-1} X \beta + (I -  \rho W)^{-1} (\alpha + u)\\
 &= \sum_{k=1}^{K} (I -  \rho W)^{-1} I \beta_k X_k
 := \sum_{k=1}^{K} S_k(W) X_k
 \end{align*}
-where $X_k = [x_{1},...,x_{Nk}]^T$.
+where $X_k = [x_{1k},...,x_{Nk}]^T$.
 
-- Direct effect = impact of $x_{ki}$ on $y_{i}$
+- Direct effect = impact of $x_{ik}$ on $y_{i}$
   + Diagonal element of $S_k(W)$.
-- Indirect effect = impact of $x_{kj}, j \neq i$ on $y_{i}$
+- Indirect effect = impact of $x_{jk}, j \neq i$ on $y_{i}$
   + Off-diagonal element of $S_k(W)$. "Spatial spillover".
 - Average over region / time to obtain summary measures [@ruttenauer2024spatial].
 
@@ -355,6 +354,7 @@ ggplot(combind, aes(factor(value, levels = rev(attr(terms(f), "term.labels"))),
   + People move to region with high rent? 
   + Could be due to amenities associated with high rent.
   + Urban area, more amusement facilities etc.
+- Negative direct effect / positive spillover in waste amount.
 
 
 ## References
