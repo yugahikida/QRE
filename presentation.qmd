@@ -8,6 +8,9 @@ format:
     incremental: false
     theme: "metropolis"
 bibliography: reference.bib
+header-includes: |
+  \usepackage{etoolbox}
+  \AtBeginEnvironment{thebibliography}{\small}
 ---
 
 ```{r setup, include=FALSE}
